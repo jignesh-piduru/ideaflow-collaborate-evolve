@@ -20,7 +20,8 @@ import {
   MessageSquare,
   ThumbsUp,
   Eye,
-  Clock
+  Clock,
+  Lightbulb
 } from 'lucide-react';
 
 interface IdeaManagementProps {
