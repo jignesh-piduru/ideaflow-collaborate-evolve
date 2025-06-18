@@ -299,7 +299,7 @@ const IdeaManagement = ({ userRole }: IdeaManagementProps) => {
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
-                    {userRole === 'admin' && (
+                    {(userRole === 'admin'  || userRole === 'employee') && (
                       <Button
                         variant="ghost"
                         size="sm"
