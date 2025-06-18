@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evidence API Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button.danger {
+            background-color: #dc3545;
+        }
+        button.danger:hover {
+            background-color: #c82333;
+        }
+        .result {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .error {
+            border-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            border-bottom: 2px solid transparent;
+        }
+        .tab.active {
+            border-bottom-color: #007bff;
+            color: #007bff;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Evidence API Tester</h1>
+    
+    <div class="container">
+        <h2>Configuration</h2>
+        <div class="form-group">
+            <label for="apiUrl">API Base URL:</label>
+            <input type="text" id="apiUrl" value="http://localhost:8080/api">
+        </div>
+        <div class="form-group">
+            <label for="projectId">Project ID:</label>
+            <input type="text" id="projectId" value="a2f56d3c-852f-4618-9132-a9457f650c51">
+        </div>
+        <div class="form-group">
+            <label for="uploadedBy">Uploaded By (User ID):</label>
+            <input type="text" id="uploadedBy" value="afde270f-a1c4-4b75-a3d7-ba861609df0c">
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('create')">Create Evidence</button>
+            <button class="tab" onclick="showTab('read')">Read Evidence</button>
+            <button class="tab" onclick="showTab('update')">Update Evidence</button>
+            <button class="tab" onclick="showTab('delete')">Delete Evidence</button>
+        </div>
+
+        <!-- Create Evidence Tab -->
+        <div id="create" class="tab-content active">
+            <h3>Create Evidence</h3>
+            <div class="form-group">
+                <label for="evidenceType">Evidence Type:</label>
+                <select id="evidenceType" onchange="toggleFields()">
+                    <option value="FILE">FILE</option>
+                    <option value="IMAGE">IMAGE</option>
+                    <option value="LINK">LINK</option>
+                    <option value="TEXT">TEXT</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="title">Title:</label>
+                <input type="text" id="title" value="Test Evidence">
+            </div>
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <textarea id="description" rows="3">This is a test evidence created via web interface</textarea>
+            </div>
+            <div class="form-group">
+                <label for="category">Category:</label>
+                <input type="text" id="category" value="Testing">
+            </div>
+            <div class="form-group" id="fileGroup">
+                <label for="file">File:</label>
+                <input type="file" id="file">
+            </div>
+            <div class="form-group" id="urlGroup" style="display: none;">
+                <label for="url">URL:</label>
+                <input type="url" id="url" value="https://example.com">
+            </div>
+            <div class="form-group">
+                <label for="tags">Tags (comma-separated):</label>
+                <input type="text" id="tags" value="test,api,evidence" placeholder="tag1,tag2,tag3">
+            </div>
+            <div class="form-group">
+                <label for="status">Status:</label>
+                <select id="status">
+                    <option value="PENDING">Pending</option>
+                    <option value="VALIDATED" selected>Validated</option>
+                    <option value="REJECTED">Rejected</option>
+                </select>
+            </div>
+            <button onclick="createEvidence()">Create Evidence</button>
+            <div id="createResult" class="result" style="display: none;"></div>
+        </div>
+
+        <!-- Read Evidence Tab -->
+        <div id="read" class="tab-content">
+            <h3>Read Evidence</h3>
+            <div class="form-group">
+                <label for="evidenceId">Evidence ID (optional - leave empty to get all):</label>
+                <input type="text" id="evidenceId" placeholder="Enter evidence ID">
+            </div>
+            <button onclick="getEvidence()">Get Evidence</button>
+            <div id="readResult" class="result" style="display: none;"></div>
+        </div>
+
+        <!-- Update Evidence Tab -->
+        <div id="update" class="tab-content">
+            <h3>Update Evidence</h3>
+            <div class="form-group">
+                <label for="updateId">Evidence ID:</label>
+                <input type="text" id="updateId" placeholder="Enter evidence ID to update">
+            </div>
+            <div class="form-group">
+                <label for="updateDescription">New Description:</label>
+                <textarea id="updateDescription" rows="3">Updated description via web interface</textarea>
+            </div>
+            <div class="form-group">
+                <label for="updateCategory">New Category:</label>
+                <input type="text" id="updateCategory" value="Updated Category">
+            </div>
+            <button onclick="updateEvidence()">Update Evidence</button>
+            <div id="updateResult" class="result" style="display: none;"></div>
+        </div>
+
+        <!-- Delete Evidence Tab -->
+        <div id="delete" class="tab-content">
+            <h3>Delete Evidence</h3>
+            <div class="form-group">
+                <label for="deleteId">Evidence ID:</label>
+                <input type="text" id="deleteId" placeholder="Enter evidence ID to delete">
+            </div>
+            <button class="danger" onclick="deleteEvidence()">Delete Evidence</button>
+            <div id="deleteResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tabName) {
+            // Hide all tab contents
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(content => content.classList.remove('active'));
+            
+            // Remove active class from all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
+        function toggleFields() {
+            const type = document.getElementById('evidenceType').value;
+            const fileGroup = document.getElementById('fileGroup');
+            const urlGroup = document.getElementById('urlGroup');
+            
+            if (type === 'LINK') {
+                fileGroup.style.display = 'none';
+                urlGroup.style.display = 'block';
+            } else if (type === 'TEXT') {
+                fileGroup.style.display = 'none';
+                urlGroup.style.display = 'none';
+            } else {
+                fileGroup.style.display = 'block';
+                urlGroup.style.display = 'none';
+            }
+        }
+
+        function showResult(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.textContent = JSON.stringify(data, null, 2);
+            element.className = `result ${isError ? 'error' : 'success'}`;
+        }
+
+        async function createEvidence() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const formData = new FormData();
+            
+            formData.append('title', document.getElementById('title').value);
+            formData.append('description', document.getElementById('description').value);
+            formData.append('type', document.getElementById('evidenceType').value);
+            formData.append('category', document.getElementById('category').value);
+            formData.append('projectId', document.getElementById('projectId').value);
+            formData.append('uploadedBy', document.getElementById('uploadedBy').value);
+            formData.append('tags', document.getElementById('tags').value);
+            formData.append('status', document.getElementById('status').value);
+
+            const type = document.getElementById('evidenceType').value;
+            if (type === 'LINK') {
+                formData.append('url', document.getElementById('url').value);
+            } else if (type === 'FILE' || type === 'IMAGE') {
+                const file = document.getElementById('file').files[0];
+                if (file) {
+                    formData.append('file', file);
+                } else {
+                    showResult('createResult', { error: 'Please select a file' }, true);
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch(`${apiUrl}/evidence`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                showResult('createResult', data, !response.ok);
+            } catch (error) {
+                showResult('createResult', { error: error.message }, true);
+            }
+        }
+
+        async function getEvidence() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const evidenceId = document.getElementById('evidenceId').value;
+            
+            let url = `${apiUrl}/evidence`;
+            if (evidenceId) {
+                url += `/${evidenceId}`;
+            } else {
+                url += '?page=0&size=20&sort=uploadedAt&direction=desc';
+            }
+            
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                const data = await response.json();
+                showResult('readResult', data, !response.ok);
+            } catch (error) {
+                showResult('readResult', { error: error.message }, true);
+            }
+        }
+
+        async function updateEvidence() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const evidenceId = document.getElementById('updateId').value;
+            
+            if (!evidenceId) {
+                showResult('updateResult', { error: 'Please enter an evidence ID' }, true);
+                return;
+            }
+            
+            const updateData = {
+                description: document.getElementById('updateDescription').value,
+                category: document.getElementById('updateCategory').value
+            };
+            
+            try {
+                const response = await fetch(`${apiUrl}/evidence/${evidenceId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(updateData)
+                });
+                
+                const data = await response.json();
+                showResult('updateResult', data, !response.ok);
+            } catch (error) {
+                showResult('updateResult', { error: error.message }, true);
+            }
+        }
+
+        async function deleteEvidence() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const evidenceId = document.getElementById('deleteId').value;
+            
+            if (!evidenceId) {
+                showResult('deleteResult', { error: 'Please enter an evidence ID' }, true);
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to delete this evidence?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${apiUrl}/evidence/${evidenceId}`, {
+                    method: 'DELETE',
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    showResult('deleteResult', { message: 'Evidence deleted successfully' }, false);
+                } else {
+                    const data = await response.json();
+                    showResult('deleteResult', data, true);
+                }
+            } catch (error) {
+                showResult('deleteResult', { error: error.message }, true);
+            }
+        }
+    </script>
+</body>
+</html>

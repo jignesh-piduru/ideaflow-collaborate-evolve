@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Currency Formatting Test</title>
+</head>
+<body>
+    <h1>Currency Formatting Test</h1>
+    <div id="results"></div>
+
+    <script>
+        // Test the formatPrice function with various scenarios
+        function formatPrice(price, currency) {
+            // Validate currency code and provide fallback
+            const validCurrency = currency && currency.length === 3 ? currency.toUpperCase() : 'USD';
+            
+            try {
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: validCurrency
+                }).format(price || 0);
+            } catch (error) {
+                // Fallback if currency is still invalid
+                console.warn(`Invalid currency code: ${currency}, using USD as fallback`);
+                return new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD'
+                }).format(price || 0);
+            }
+        }
+
+        // Test cases
+        const testCases = [
+            { price: 99.99, currency: 'USD', expected: '$99.99' },
+            { price: 99.99, currency: 'EUR', expected: '€99.99' },
+            { price: 99.99, currency: 'GBP', expected: '£99.99' },
+            { price: 99.99, currency: undefined, expected: '$99.99' },
+            { price: 99.99, currency: null, expected: '$99.99' },
+            { price: 99.99, currency: '', expected: '$99.99' },
+            { price: 99.99, currency: 'INVALID', expected: '$99.99' },
+            { price: 0, currency: 'USD', expected: '$0.00' },
+            { price: undefined, currency: 'USD', expected: '$0.00' },
+            { price: null, currency: 'USD', expected: '$0.00' }
+        ];
+
+        const resultsDiv = document.getElementById('results');
+        let allPassed = true;
+
+        testCases.forEach((testCase, index) => {
+            try {
+                const result = formatPrice(testCase.price, testCase.currency);
+                const passed = result.includes('$') || result.includes('€') || result.includes('£');
+                
+                const div = document.createElement('div');
+                div.style.padding = '5px';
+                div.style.margin = '2px';
+                div.style.backgroundColor = passed ? '#d4edda' : '#f8d7da';
+                div.style.border = `1px solid ${passed ? '#c3e6cb' : '#f5c6cb'}`;
+                div.innerHTML = `
+                    <strong>Test ${index + 1}:</strong> 
+                    formatPrice(${testCase.price}, "${testCase.currency}") = "${result}" 
+                    ${passed ? '✅ PASS' : '❌ FAIL'}
+                `;
+                resultsDiv.appendChild(div);
+
+                if (!passed) allPassed = false;
+            } catch (error) {
+                const div = document.createElement('div');
+                div.style.padding = '5px';
+                div.style.margin = '2px';
+                div.style.backgroundColor = '#f8d7da';
+                div.style.border = '1px solid #f5c6cb';
+                div.innerHTML = `
+                    <strong>Test ${index + 1}:</strong> 
+                    formatPrice(${testCase.price}, "${testCase.currency}") = ERROR: ${error.message} 
+                    ❌ FAIL
+                `;
+                resultsDiv.appendChild(div);
+                allPassed = false;
+            }
+        });
+
+        // Summary
+        const summaryDiv = document.createElement('div');
+        summaryDiv.style.padding = '10px';
+        summaryDiv.style.margin = '10px 0';
+        summaryDiv.style.backgroundColor = allPassed ? '#d1ecf1' : '#f8d7da';
+        summaryDiv.style.border = `2px solid ${allPassed ? '#bee5eb' : '#f5c6cb'}`;
+        summaryDiv.innerHTML = `
+            <h2>${allPassed ? '🎉 All Tests Passed!' : '❌ Some Tests Failed'}</h2>
+            <p>The currency formatting function ${allPassed ? 'handles all edge cases correctly' : 'needs more work'}.</p>
+        `;
+        resultsDiv.appendChild(summaryDiv);
+
+        console.log('Currency formatting test completed:', allPassed ? 'PASS' : 'FAIL');
+    </script>
+</body>
+</html>

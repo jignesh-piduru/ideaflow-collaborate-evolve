@@ -1,16 +1,22 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Lightbulb, 
-  Users, 
-  Database, 
-  Settings, 
-  LogOut, 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/use-toast';
+import ThemeManager from '@/components/ThemeManager';
+import IntegrationManager from '@/components/IntegrationManager';
+import RoleManager from '@/components/RoleManager';
+import SubscriptionManager from '@/components/SubscriptionManager';
+import ideasApi from '@/services/ideasApi';
+import subscriptionApi from '@/services/subscriptionApi';
+import {
+  Lightbulb,
+  Database,
+  Settings,
+  LogOut,
   TrendingUp,
   Clock,
   CheckCircle,
@@ -37,6 +43,20 @@ import ApiDevelopment from './ApiDevelopment';
 import Deployment from './Deployment';
 import Evidence from './Evidence';
 
+interface Idea {
+  id: number | string;
+  title: string;
+  description: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+  tags: string[];
+  assignedTo: string;
+  upvotes: number;
+  comments: number;
+  dueDate: string;
+  createdDate: string;
+}
+
 interface DashboardProps {
   userRole: 'admin' | 'employee';
   onLogout: () => void;
@@ -45,11 +65,88 @@ interface DashboardProps {
 const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [overviewData, setOverviewData] = useState({
+    totalIdeas: 0,
+    inProgressIdeas: 0,
+    completedIdeas: 0,
+    totalUpvotes: 0,
+    activeSubscriptions: 0,
+    apiEndpoints: 0,
+    evidenceFiles: 0,
+    teamMembers: 0
+  });
+  const { toast } = useToast();
+
+  // Fetch overview data from all systems
+  const fetchOverviewData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch ideas data
+      const ideasResponse = await ideasApi.getIdeas();
+      const ideasData = ideasResponse.content || [];
+      setIdeas(ideasData);
+
+      // Calculate idea statistics
+      const totalIdeas = ideasData.length;
+      const inProgressIdeas = ideasData.filter(idea => idea.status === 'IN_PROGRESS').length;
+      const completedIdeas = ideasData.filter(idea => idea.status === 'COMPLETED').length;
+      const totalUpvotes = ideasData.reduce((sum, idea) => sum + (idea.upvotes || 0), 0);
+
+      // Fetch subscription data
+      let activeSubscriptions = 0;
+      try {
+        const subscriptionsResponse = await subscriptionApi.getSubscriptions();
+        activeSubscriptions = (subscriptionsResponse.content || []).filter(sub => sub.status === 'ACTIVE').length;
+      } catch (error) {
+        console.log('Subscriptions API not available, using default value');
+      }
+
+      // Fetch API endpoints data
+      let apiEndpoints = 0;
+      try {
+        const endpointsResponse = await fetch('http://localhost:8081/api/endpoints');
+        if (endpointsResponse.ok) {
+          const endpointsData = await endpointsResponse.json();
+          apiEndpoints = (endpointsData.content || endpointsData || []).length;
+        }
+      } catch (error) {
+        console.log('API endpoints not available, using default value');
+      }
+
+      // Calculate team members from unique assignees
+      const uniqueAssignees = new Set(ideasData.map(idea => idea.assignedTo).filter(assignee => assignee && assignee !== 'Unassigned'));
+      const teamMembers = uniqueAssignees.size;
+
+      // Update overview data
+      setOverviewData({
+        totalIdeas,
+        inProgressIdeas,
+        completedIdeas,
+        totalUpvotes,
+        activeSubscriptions,
+        apiEndpoints,
+        evidenceFiles: 12, // Placeholder - would come from evidence API
+        teamMembers
+      });
+
+    } catch (error) {
+      console.error('Error fetching overview data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch overview data. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: BarChart3, roles: ['admin', 'employee'] },
     { id: 'ideas', label: 'Ideas', icon: Lightbulb, roles: ['admin', 'employee'] },
-    { id: 'assignments', label: 'Assignments', icon: Users, roles: ['admin'] },
     { id: 'progress', label: 'Progress Tracking', icon: TrendingUp, roles: ['admin', 'employee'] },
     { id: 'database', label: 'Database Tracker', icon: Database, roles: ['admin', 'employee'] },
     { id: 'api', label: 'API Development', icon: Code, roles: ['admin', 'employee'] },
@@ -60,19 +157,55 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
 
   const filteredMenuItems = menuItems.filter(item => item.roles.includes(userRole));
 
+  useEffect(() => {
+    fetchOverviewData();
+  }, []);
+
+  // Enhanced stats from multiple APIs with real-time data
+  const safeIdeas = ideas || [];
   const stats = [
-    { title: 'Total Ideas', value: '24', change: '+12%', icon: Lightbulb, color: 'text-blue-500' },
-    { title: 'In Progress', value: '8', change: '+5%', icon: Clock, color: 'text-yellow-500' },
-    { title: 'Completed', value: '12', change: '+25%', icon: CheckCircle, color: 'text-green-500' },
-    { title: 'Pending Review', value: '4', change: '-8%', icon: AlertCircle, color: 'text-red-500' },
+    {
+      title: 'Total Ideas',
+      value: overviewData.totalIdeas.toString(),
+      change: `${overviewData.totalUpvotes} total upvotes`,
+      icon: Lightbulb,
+      color: 'text-blue-500'
+    },
+    {
+      title: 'In Progress',
+      value: overviewData.inProgressIdeas.toString(),
+      change: `${overviewData.completedIdeas} completed`,
+      icon: Clock,
+      color: 'text-yellow-500'
+    },
+    {
+      title: 'API Endpoints',
+      value: overviewData.apiEndpoints.toString(),
+      change: `${overviewData.activeSubscriptions} active subscriptions`,
+      icon: Code,
+      color: 'text-green-500'
+    },
+    {
+      title: 'Team Members',
+      value: overviewData.teamMembers.toString(),
+      change: `${overviewData.evidenceFiles} evidence files`,
+      icon: Database,
+      color: 'text-purple-500'
+    },
   ];
 
-  const recentActivities = [
-    { user: 'John Doe', action: 'submitted new idea', time: '2 hours ago', type: 'idea' },
-    { user: 'Sarah Smith', action: 'completed API development', time: '4 hours ago', type: 'api' },
-    { user: 'Mike Johnson', action: 'uploaded evidence', time: '6 hours ago', type: 'evidence' },
-    { user: 'Lisa Chen', action: 'updated database schema', time: '8 hours ago', type: 'database' },
-  ];
+  // Generate recent activities from real API data with safety checks
+  const recentActivities = safeIdeas
+    .sort((a, b) => new Date(b.createdDate || '').getTime() - new Date(a.createdDate || '').getTime())
+    .slice(0, 4)
+    .map(idea => ({
+      user: idea.assignedTo || 'Unassigned',
+      action: `submitted "${idea.title || 'Untitled'}"`,
+      time: new Date(idea.createdDate || '').toLocaleDateString(),
+      type: 'idea',
+      priority: idea.priority || 'MEDIUM',
+      status: idea.status || 'PENDING'
+    }));
 
   const renderOverview = () => (
     <div className="space-y-8">
@@ -81,30 +214,68 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Welcome back, {userRole === 'admin' ? 'Admin' : 'Employee'}! 👋
           </h1>
-          <p className="text-lg text-gray-600">Here's what's happening with your ideas today.</p>
+          <p className="text-lg text-gray-600">
+            Here's your real-time overview with data from Ideas, APIs, Subscriptions, and more.
+          </p>
+          <div className="flex items-center space-x-3 mt-3">
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              🔄 Live Data
+            </Badge>
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              📊 Multi-System Integration
+            </Badge>
+          </div>
         </div>
+        <Button
+          variant="outline"
+          onClick={fetchOverviewData}
+          disabled={loading}
+          className="rounded-xl"
+        >
+          {loading ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
+          ) : (
+            <TrendingUp className="w-4 h-4 mr-2" />
+          )}
+          Refresh Data
+        </Button>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <Card key={index} className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value}</p>
-                  <p className={`text-sm mt-1 ${stat.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                    {stat.change} from last month
-                  </p>
+        {loading ? (
+          Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index} className="rounded-2xl shadow-lg border-0 bg-white">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="h-4 bg-gray-200 rounded animate-pulse mb-2"></div>
+                    <div className="h-8 bg-gray-200 rounded animate-pulse mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3"></div>
+                  </div>
+                  <div className="w-12 h-12 bg-gray-200 rounded-2xl animate-pulse"></div>
                 </div>
-                <div className={`p-3 rounded-2xl bg-gray-50`}>
-                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          stats.map((stat, index) => (
+            <Card key={index} className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border-0 bg-white">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value}</p>
+                    <p className="text-sm text-gray-500 mt-1">{stat.change}</p>
+                  </div>
+                  <div className={`p-3 rounded-2xl bg-gray-50`}>
+                    <stat.icon className={`w-8 h-8 ${stat.color}`} />
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* Recent Activities */}
@@ -115,24 +286,47 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
             <CardDescription>Latest updates from your team</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {recentActivities.map((activity, index) => (
-              <div key={index} className="flex items-center space-x-4 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-                <Avatar className="w-10 h-10">
-                  <AvatarFallback className="bg-blue-100 text-blue-600">
-                    {activity.user.split(' ').map(n => n[0]).join('')}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    {activity.user} {activity.action}
-                  </p>
-                  <p className="text-xs text-gray-500">{activity.time}</p>
-                </div>
-                <Badge variant="outline" className="rounded-full">
-                  {activity.type}
-                </Badge>
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mx-auto"></div>
               </div>
-            ))}
+            ) : recentActivities.length > 0 ? (
+              recentActivities.map((activity, index) => (
+                <div key={index} className="flex items-center space-x-4 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                  <Avatar className="w-10 h-10">
+                    <AvatarFallback className="bg-blue-100 text-blue-600">
+                      {activity.user === 'Unassigned' ? 'UN' : activity.user.split(' ').map(n => n[0]).join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">
+                      {activity.user} {activity.action}
+                    </p>
+                    <p className="text-xs text-gray-500">{activity.time}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={activity.priority === 'HIGH' ? 'destructive' :
+                              activity.priority === 'MEDIUM' ? 'default' : 'secondary'}
+                      className="text-xs"
+                    >
+                      {activity.priority}
+                    </Badge>
+                    <Badge
+                      variant={activity.status === 'COMPLETED' ? 'default' : 'outline'}
+                      className="text-xs"
+                    >
+                      {activity.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Lightbulb className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>No recent activities found</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -142,21 +336,37 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
             <CardDescription>Common tasks to get you started</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button variant="outline" className="w-full justify-start rounded-xl h-12">
+            <Button
+              variant="outline"
+              className="w-full justify-start rounded-xl h-12"
+              onClick={() => setActiveTab('ideas')}
+            >
               <Lightbulb className="w-4 h-4 mr-3" />
               Create New Idea
             </Button>
-            <Button variant="outline" className="w-full justify-start rounded-xl h-12" onClick={() => setShowEvidenceModal(true)}>
+            <Button
+              variant="outline"
+              className="w-full justify-start rounded-xl h-12"
+              onClick={() => setShowEvidenceModal(true)}
+            >
               <Upload className="w-4 h-4 mr-3" />
               Upload Evidence
             </Button>
-            <Button variant="outline" className="w-full justify-start rounded-xl h-12">
-              <Calendar className="w-4 h-4 mr-3" />
-              Schedule Review
+            <Button
+              variant="outline"
+              className="w-full justify-start rounded-xl h-12"
+              onClick={() => setActiveTab('progress')}
+            >
+              <TrendingUp className="w-4 h-4 mr-3" />
+              Track Progress
             </Button>
-            <Button variant="outline" className="w-full justify-start rounded-xl h-12">
-              <FileText className="w-4 h-4 mr-3" />
-              Generate Report
+            <Button
+              variant="outline"
+              className="w-full justify-start rounded-xl h-12"
+              onClick={() => setActiveTab('api')}
+            >
+              <Code className="w-4 h-4 mr-3" />
+              API Development
             </Button>
           </CardContent>
         </Card>
@@ -171,40 +381,52 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
         <p className="text-lg text-gray-600">Manage your preferences and integrations</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="rounded-2xl shadow-lg border-0 bg-white">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Palette className="w-5 h-5 text-purple-600" />
-              <span>Theme Customization</span>
-            </CardTitle>
-            <CardDescription>Personalize your workspace appearance</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 border-2 border-blue-200 rounded-xl bg-blue-50 cursor-pointer">
-                <div className="w-full h-8 bg-blue-500 rounded mb-2"></div>
-                <p className="text-xs text-center">Blue</p>
-              </div>
-              <div className="p-3 border rounded-xl bg-gray-50 cursor-pointer hover:border-gray-300">
-                <div className="w-full h-8 bg-purple-500 rounded mb-2"></div>
-                <p className="text-xs text-center">Purple</p>
-              </div>
-              <div className="p-3 border rounded-xl bg-gray-50 cursor-pointer hover:border-gray-300">
-                <div className="w-full h-8 bg-green-500 rounded mb-2"></div>
-                <p className="text-xs text-center">Green</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="themes" className="w-full">
+        <TabsList className="grid w-full grid-cols-4 rounded-2xl">
+          <TabsTrigger value="themes" className="rounded-xl">
+            <Palette className="w-4 h-4 mr-2" />
+            Themes
+          </TabsTrigger>
+          <TabsTrigger value="integrations" className="rounded-xl">
+            <Zap className="w-4 h-4 mr-2" />
+            Integrations
+          </TabsTrigger>
+          <TabsTrigger value="roles" className="rounded-xl">
+            <Shield className="w-4 h-4 mr-2" />
+            Roles
+          </TabsTrigger>
+          <TabsTrigger value="subscriptions" className="rounded-xl">
+            <CreditCard className="w-4 h-4 mr-2" />
+            Billing
+          </TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="themes" className="mt-8">
+          <ThemeManager userId="b032f00f-9a5e-43f0-9ac2-9e028815e847" />
+        </TabsContent>
+
+        <TabsContent value="integrations" className="mt-8">
+          <IntegrationManager userId="afde270f-a1c4-4b75-a3d7-ba861609df0c" />
+        </TabsContent>
+
+        <TabsContent value="roles" className="mt-8">
+          <RoleManager userRole={userRole} />
+        </TabsContent>
+
+        <TabsContent value="subscriptions" className="mt-8">
+          <SubscriptionManager userId="b032f00f-9a5e-43f0-9ac2-9e028815e847" />
+        </TabsContent>
+      </Tabs>
+
+      {/* Additional Settings Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-8 mt-8">
         <Card className="rounded-2xl shadow-lg border-0 bg-white">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <Shield className="w-5 h-5 text-green-600" />
-              <span>User Roles & Access</span>
+              <Settings className="w-5 h-5 text-gray-600" />
+              <span>General Settings</span>
             </CardTitle>
-            <CardDescription>Manage permissions and access control</CardDescription>
+            <CardDescription>Configure general application settings</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
@@ -214,64 +436,8 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
               </div>
               <Badge className="bg-blue-100 text-blue-800 rounded-full">Active</Badge>
             </div>
-            {userRole === 'admin' && (
-              <Button className="w-full rounded-xl">
-                Manage Team Permissions
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-lg border-0 bg-white">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Zap className="w-5 h-5 text-yellow-600" />
-              <span>Integration Settings</span>
-            </CardTitle>
-            <CardDescription>Connect with external tools and services</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 border rounded-xl">
-              <div className="flex items-center space-x-3">
-                <Github className="w-6 h-6" />
-                <div>
-                  <p className="font-medium">GitHub</p>
-                  <p className="text-sm text-gray-600">Code repository sync</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" className="rounded-xl">Connect</Button>
-            </div>
-            <div className="flex items-center justify-between p-3 border rounded-xl">
-              <div className="flex items-center space-x-3">
-                <Slack className="w-6 h-6" />
-                <div>
-                  <p className="font-medium">Slack</p>
-                  <p className="text-sm text-gray-600">Team notifications</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" className="rounded-xl">Connect</Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-lg border-0 bg-white">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <CreditCard className="w-5 h-5 text-indigo-600" />
-              <span>Subscription & Billing</span>
-            </CardTitle>
-            <CardDescription>Manage your premium features and billing</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-medium text-indigo-900">Premium Plan</p>
-                <Badge className="bg-indigo-100 text-indigo-800 rounded-full">Active</Badge>
-              </div>
-              <p className="text-sm text-indigo-700">Advanced features unlocked</p>
-            </div>
             <Button variant="outline" className="w-full rounded-xl">
-              Manage Subscription
+              Export Data
             </Button>
           </CardContent>
         </Card>
@@ -280,7 +446,7 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex w-full">
+    <div className="min-h-screen max-h-screen overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 flex w-full">
       {/* Static Sidebar */}
       <div className="w-72 bg-white border-r border-gray-200 p-6 shadow-lg">
         <div className="flex items-center space-x-3 mb-8">
@@ -333,7 +499,7 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-8 overflow-scroll">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
@@ -362,15 +528,7 @@ const Dashboard = ({ userRole, onLogout }: DashboardProps) => {
           {activeTab === 'deployment' && <Deployment userRole={userRole} />}
           {activeTab === 'evidence' && <Evidence userRole={userRole} />}
           {activeTab === 'settings' && renderSettings()}
-          {activeTab === 'assignments' && (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Users className="w-8 h-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Assignment Management</h3>
-              <p className="text-gray-600">Advanced assignment features coming soon with enhanced workflow management.</p>
-            </div>
-          )}
+
         </div>
       </div>
 

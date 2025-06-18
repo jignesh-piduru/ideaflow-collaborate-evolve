@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { mockEvidenceApi, realEvidenceApi, USE_MOCK_EVIDENCE_API } from '@/services/mockEvidenceApi';
+import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Upload, 
-  File, 
-  Image, 
-  Link, 
-  X, 
+import {
+  Upload,
+  File,
+  Image,
+  Link,
+  X,
   CheckCircle,
   FileText,
   Download,
@@ -19,31 +21,40 @@ import {
 
 interface EvidenceUploadProps {
   onClose: () => void;
+  projects?: any[];
+  vaultSettings?: any;
 }
 
 interface Evidence {
-  id: number;
+  id: string;
   title: string;
-  description: string;
-  type: 'file' | 'image' | 'link';
+  description?: string;
+  type: 'FILE' | 'IMAGE' | 'LINK' | 'TEXT' | 'DOCUMENT';
   fileName?: string;
   fileSize?: string;
   url?: string;
-  projectId: number;
+  projectId: string;
   projectName: string;
   uploadedBy: string;
   uploadedAt: string;
   category: string;
+  status: 'PENDING' | 'VALIDATED' | 'REJECTED';
+  tags: string[];
 }
 
-const EvidenceUpload = ({ onClose }: EvidenceUploadProps) => {
-  const [evidenceType, setEvidenceType] = useState<'file' | 'image' | 'link'>('file');
+const EvidenceUpload = ({ onClose, projects = [], vaultSettings }: EvidenceUploadProps) => {
+  const [evidenceType, setEvidenceType] = useState<'FILE' | 'IMAGE' | 'LINK' | 'TEXT'>('FILE');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedProject, setSelectedProject] = useState('');
   const [category, setCategory] = useState('');
   const [url, setUrl] = useState('');
+  const [tags, setTags] = useState('');
+  const [status, setStatus] = useState<'PENDING' | 'VALIDATED' | 'REJECTED'>('PENDING');
   const [dragActive, setDragActive] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const { toast } = useToast();
 
   const [existingEvidence] = useState<Evidence[]>([
     {
@@ -86,10 +97,11 @@ const EvidenceUpload = ({ onClose }: EvidenceUploadProps) => {
     }
   ]);
 
-  const projects = [
-    { id: 1, name: 'AI Customer Support' },
-    { id: 2, name: 'Mobile Optimization' },
-    { id: 3, name: 'Blockchain Payments' }
+  // Use projects from props or fallback to default
+  const projectsList = projects.length > 0 ? projects : [
+    { id: '1', name: 'AI Customer Support' },
+    { id: '2', name: 'Mobile Optimization' },
+    { id: '3', name: 'Blockchain Payments' }
   ];
 
   const categories = [
@@ -124,28 +136,101 @@ const EvidenceUpload = ({ onClose }: EvidenceUploadProps) => {
   };
 
   const handleFiles = (files: FileList) => {
-    console.log('Files uploaded:', files);
-    // Handle file upload logic here
+    if (files.length > 0) {
+      setSelectedFile(files[0]);
+      if (!title) {
+        setTitle(files[0].name.split('.')[0]); // Set title to filename without extension
+      }
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Evidence submitted:', {
-      type: evidenceType,
-      title,
-      description,
-      project: selectedProject,
-      category,
-      url: evidenceType === 'link' ? url : undefined
-    });
-    
-    // Reset form
-    setTitle('');
-    setDescription('');
-    setSelectedProject('');
-    setCategory('');
-    setUrl('');
-    onClose();
+
+    if (!title || !selectedProject || !category) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (evidenceType === 'LINK' && !url) {
+      toast({
+        title: "Error",
+        description: "Please provide a URL for link evidence.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if ((evidenceType === 'FILE' || evidenceType === 'IMAGE') && !selectedFile) {
+      toast({
+        title: "Error",
+        description: "Please select a file to upload.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      const api = USE_MOCK_EVIDENCE_API ? mockEvidenceApi : realEvidenceApi;
+
+      // Parse tags from comma-separated string
+      const tagsArray = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+
+      // Get current user ID (this will be handled automatically by the API service now)
+      if (selectedFile) {
+        await api.uploadFile(
+          selectedFile,
+          selectedProject,
+          category,
+          title,
+          description,
+          undefined, // currentUserId - will be auto-resolved
+          tagsArray,
+          status
+        );
+      } else {
+        await api.createEvidence({
+          title,
+          description,
+          type: evidenceType,
+          url: evidenceType === 'LINK' ? url : undefined,
+          projectId: selectedProject,
+          projectName: projectsList.find(p => p.id === selectedProject)?.name || 'Unknown Project',
+          category,
+          tags: tagsArray,
+          status
+        });
+      }
+
+      toast({
+        title: "Success",
+        description: "Evidence uploaded successfully!",
+      });
+
+      // Reset form
+      setTitle('');
+      setDescription('');
+      setSelectedProject('');
+      setCategory('');
+      setUrl('');
+      setSelectedFile(null);
+      onClose();
+    } catch (error) {
+      console.error('Error uploading evidence:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload evidence. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const getFileIcon = (type: string) => {
@@ -189,9 +274,10 @@ const EvidenceUpload = ({ onClose }: EvidenceUploadProps) => {
                     <SelectValue placeholder="Select evidence type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="file">File Upload</SelectItem>
-                    <SelectItem value="image">Image Upload</SelectItem>
-                    <SelectItem value="link">External Link</SelectItem>
+                    <SelectItem value="FILE">File Upload</SelectItem>
+                    <SelectItem value="IMAGE">Image Upload</SelectItem>
+                    <SelectItem value="LINK">External Link</SelectItem>
+                    <SelectItem value="TEXT">Text Evidence</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -215,7 +301,7 @@ const EvidenceUpload = ({ onClose }: EvidenceUploadProps) => {
                   <SelectValue placeholder="Select Project" />
                 </SelectTrigger>
                 <SelectContent>
-                  {projects.map((project) => (
+                  {projectsList.map((project) => (
                     <SelectItem key={project.id} value={project.id.toString()}>
                       {project.name}
                     </SelectItem>
@@ -236,18 +322,49 @@ const EvidenceUpload = ({ onClose }: EvidenceUploadProps) => {
                 </SelectContent>
               </Select>
 
-              {evidenceType === 'link' ? (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Tags (comma-separated)</label>
+                <Input
+                  placeholder="tag1, tag2, tag3"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Status</label>
+                <Select value={status} onValueChange={(value: any) => setStatus(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="VALIDATED">Validated</SelectItem>
+                    <SelectItem value="REJECTED">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {evidenceType === 'LINK' ? (
                 <Input
                   placeholder="Enter URL"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   required
                 />
+              ) : evidenceType === 'TEXT' ? (
+                <Textarea
+                  placeholder="Enter text evidence content"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  required
+                />
               ) : (
                 <div
                   className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    dragActive 
-                      ? 'border-blue-400 bg-blue-50' 
+                    dragActive
+                      ? 'border-blue-400 bg-blue-50'
                       : 'border-gray-300 hover:border-gray-400'
                   }`}
                   onDragEnter={handleDrag}
@@ -257,29 +374,29 @@ const EvidenceUpload = ({ onClose }: EvidenceUploadProps) => {
                 >
                   <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600 mb-2">
-                    Drag and drop your {evidenceType} here, or{' '}
+                    Drag and drop your {evidenceType.toLowerCase()} here, or{' '}
                     <label className="text-blue-600 hover:text-blue-700 cursor-pointer">
                       browse
                       <input
                         type="file"
                         className="hidden"
-                        accept={evidenceType === 'image' ? 'image/*' : '*'}
+                        accept={evidenceType === 'IMAGE' ? 'image/*' : '*'}
                         onChange={(e) => e.target.files && handleFiles(e.target.files)}
                       />
                     </label>
                   </p>
                   <p className="text-sm text-gray-500">
-                    {evidenceType === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'Any file up to 50MB'}
+                    {evidenceType === 'IMAGE' ? 'PNG, JPG, GIF up to 10MB' : 'Any file up to 50MB'}
                   </p>
                 </div>
               )}
 
               <div className="flex space-x-3">
-                <Button type="submit" className="flex-1">
+                <Button type="submit" className="flex-1" disabled={uploading}>
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Evidence
+                  {uploading ? 'Uploading...' : 'Upload Evidence'}
                 </Button>
-                <Button type="button" variant="outline" onClick={onClose}>
+                <Button type="button" variant="outline" onClick={onClose} disabled={uploading}>
                   Cancel
                 </Button>
               </div>

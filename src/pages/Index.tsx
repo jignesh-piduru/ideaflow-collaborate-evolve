@@ -18,7 +18,7 @@ const Index = () => {
     e.preventDefault();
     // Simple demo authentication
     if (email && password) {
-      setUserRole(email.includes('admin') ? 'admin' : 'employee');
+      setUserRole('admin'); // Default to admin for testing
       setIsAuthenticated(true);
     }
   };
