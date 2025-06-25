@@ -1,3 +1,5 @@
+import type { Employee } from '../components/EmployeeManagement';
+
 // Dashboard API service for user-themes, integration-settings, and roles
 interface UserTheme {
   id: string;
@@ -312,6 +314,40 @@ export const mockDashboardApi = {
     const roles = loadFromStorage(STORAGE_KEYS.ROLES, mockRoles);
     const filteredRoles = roles.filter(role => role.id !== id);
     saveToStorage(STORAGE_KEYS.ROLES, filteredRoles);
+  },
+
+  async createEmployee(data: Partial<Employee>): Promise<Employee> {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    // Simulate ID and default values
+    const newEmployee: Employee = {
+      id: Date.now().toString(),
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      email: data.email || '',
+      phone: data.phone || '',
+      department: data.department || '',
+      position: data.position || '',
+      status: data.status as 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE' || 'ACTIVE',
+      hireDate: data.hireDate || new Date().toISOString().split('T')[0],
+      salary: data.salary || 0,
+      address: data.address || '',
+      avatar: data.avatar || '',
+      manager: data.manager || '',
+      skills: data.skills || [],
+    };
+    // Optionally, store in localStorage if you have a mock employees array
+    return newEmployee;
+  },
+
+  async updateEmployee(id: string, data: Partial<Employee>): Promise<Employee> {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    // Simulate update (no real storage in mock)
+    return { id, ...data } as Employee;
+  },
+
+  async deleteEmployee(id: string): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    // Simulate delete (no real storage in mock)
   }
 };
 
@@ -479,7 +515,74 @@ export const realDashboardApi = {
       const errorText = await response.text();
       throw new Error(`Failed to delete role: ${response.status} ${response.statusText} - ${errorText}`);
     }
+  },
+
+  async createEmployee(data: Partial<Employee>): Promise<Employee> {
+    const response = await fetch('http://localhost:8080/api/employees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create employee: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+    return await response.json();
+  },
+
+  async updateEmployee(id: string, data: Partial<Employee>): Promise<Employee> {
+    const response = await fetch(`http://localhost:8080/api/employees/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to update employee: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+    return await response.json();
+  },
+
+  async deleteEmployee(id: string): Promise<void> {
+    const response = await fetch(`http://localhost:8080/api/employees/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to delete employee: ${response.status} ${response.statusText} - ${errorText}`);
+    }
   }
 };
 
 export type { UserTheme, IntegrationSetting, Role, ApiResponse };
+
+export async function getEmployees() {
+  const response = await fetch('http://localhost:8080/api/employees');
+  if (!response.ok) throw new Error('Failed to fetch employees');
+  return response.json();
+}
+
+export async function createEmployee(data: Partial<Employee>) {
+  if (USE_MOCK_DASHBOARD_API) {
+    return mockDashboardApi.createEmployee(data);
+  } else {
+    return realDashboardApi.createEmployee(data);
+  }
+}
+
+export async function updateEmployee(id: string, data: Partial<Employee>) {
+  if (USE_MOCK_DASHBOARD_API) {
+    return mockDashboardApi.updateEmployee(id, data);
+  } else {
+    return realDashboardApi.updateEmployee(id, data);
+  }
+}
+
+export async function deleteEmployee(id: string) {
+  if (USE_MOCK_DASHBOARD_API) {
+    return mockDashboardApi.deleteEmployee(id);
+  } else {
+    return realDashboardApi.deleteEmployee(id);
+  }
+}

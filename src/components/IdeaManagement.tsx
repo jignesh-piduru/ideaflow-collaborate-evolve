@@ -31,11 +31,12 @@ import {
 
 interface IdeaManagementProps {
   userRole: 'admin' | 'employee';
+  employeeId?: string;
 }
 
 // Idea interface is now imported from the API service
 
-const IdeaManagement = ({ userRole }: IdeaManagementProps) => {
+const IdeaManagement = ({ userRole, employeeId }: IdeaManagementProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPriority, setSelectedPriority] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -79,7 +80,7 @@ const IdeaManagement = ({ userRole }: IdeaManagementProps) => {
       setLoading(true);
       console.log('Fetching ideas from API');
 
-      const data = await ideasApi.getIdeas();
+      const data = await ideasApi.getIdeas(employeeId);
       console.log('Fetched ideas data:', data);
       setIdeas(data.content || []);
     } catch (error) {
@@ -107,11 +108,12 @@ const IdeaManagement = ({ userRole }: IdeaManagementProps) => {
           assignedTo: newIdea.assignedTo,
           dueDate: newIdea.dueDate,
           upvotes: newIdea.upvotes,
-          comments: newIdea.comments
+          comments: newIdea.comments,
+          ...(employeeId ? { employeeId } : {})
         };
 
         console.log('Creating idea:', ideaData);
-        const result = await ideasApi.createIdea(ideaData);
+        const result = await ideasApi.createIdea(ideaData, employeeId);
         console.log('Idea created successfully:', result);
 
         await fetchIdeas();
@@ -149,7 +151,7 @@ const IdeaManagement = ({ userRole }: IdeaManagementProps) => {
         await ideasApi.updateIdea(String(selectedIdea.id), {
           assignedTo: assignee,
           status: 'IN_PROGRESS'
-        });
+        }, employeeId);
 
         await fetchIdeas();
         setShowAssignModal(false);
@@ -172,7 +174,7 @@ const IdeaManagement = ({ userRole }: IdeaManagementProps) => {
   const handleUpvote = async (ideaId: number | string) => {
     try {
       console.log('Upvoting idea:', ideaId);
-      await ideasApi.upvoteIdea(String(ideaId));
+      await ideasApi.upvoteIdea(String(ideaId), employeeId);
 
       await fetchIdeas();
       toast({
@@ -193,7 +195,7 @@ const IdeaManagement = ({ userRole }: IdeaManagementProps) => {
     if (selectedIdea) {
       try {
         console.log('Updating idea:', selectedIdea.id, ideaData);
-        await ideasApi.updateIdea(String(selectedIdea.id), ideaData);
+        await ideasApi.updateIdea(String(selectedIdea.id), { ...ideaData, ...(employeeId ? { employeeId } : {}) }, employeeId);
 
         await fetchIdeas();
         setShowEditModal(false);
@@ -215,7 +217,7 @@ const IdeaManagement = ({ userRole }: IdeaManagementProps) => {
   const handleDeleteIdea = async (ideaId: number | string) => {
     try {
       console.log('Deleting idea:', ideaId);
-      await ideasApi.deleteIdea(String(ideaId));
+      await ideasApi.deleteIdea(String(ideaId), employeeId);
 
       await fetchIdeas();
       toast({

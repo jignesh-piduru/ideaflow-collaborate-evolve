@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +32,7 @@ import {
 
 interface ApiDevelopmentProps {
   userRole: 'admin' | 'employee';
+  employeeId?: string;
 }
 
 interface Endpoint {
@@ -100,7 +100,7 @@ interface EndpointFormData {
   status?: 'COMPLETED' | 'NOT_STARTED' | 'IN_PROGRESS';
 }
 
-const ApiDevelopment = ({ userRole }: ApiDevelopmentProps) => {
+const ApiDevelopment = ({ userRole, employeeId }: ApiDevelopmentProps) => {
   const [activeTab, setActiveTab] = useState('endpoints');
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [testLogs, setTestLogs] = useState<TestLog[]>([]);
@@ -134,9 +134,11 @@ const ApiDevelopment = ({ userRole }: ApiDevelopmentProps) => {
     try {
       setLoading(true);
       console.log('Fetching endpoints from /api/endpoints with pagination');
-
-      // Use paginated endpoint like your other APIs
-      const response = await fetch('/api/endpoints?page=0&size=20&sort=createdAt&direction=desc');
+      let url = '/api/endpoints?page=0&size=20&sort=createdAt&direction=desc';
+      if (employeeId) {
+        url += `&employeeId=${employeeId}`;
+      }
+      const response = await fetch(url);
       console.log('Fetch response status:', response.status);
       console.log('Response URL:', response.url);
 
@@ -183,7 +185,11 @@ const ApiDevelopment = ({ userRole }: ApiDevelopmentProps) => {
         updatedAt: new Date().toISOString()
       };
 
-      const response = await fetch('/api/endpoints', {
+      let url = '/api/endpoints';
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
+      }
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -244,7 +250,11 @@ const ApiDevelopment = ({ userRole }: ApiDevelopmentProps) => {
         updatedAt: new Date().toISOString()
       };
 
-      const response = await fetch(`/api/endpoints/${id}`, {
+      let url = `/api/endpoints/${id}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
+      }
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -283,7 +293,11 @@ const ApiDevelopment = ({ userRole }: ApiDevelopmentProps) => {
     try {
       console.log('Deleting endpoint with ID:', id);
 
-      const response = await fetch(`/api/endpoints/${id}`, {
+      let url = `/api/endpoints/${id}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
+      }
+      const response = await fetch(url, {
         method: 'DELETE',
       });
 
@@ -315,7 +329,11 @@ const ApiDevelopment = ({ userRole }: ApiDevelopmentProps) => {
     try {
       console.log('Fetching test logs for endpoint ID:', endpointId);
 
-      const response = await fetch(`/api/test-logs/endpoint/${endpointId}`);
+      let url = `/api/test-logs/endpoint/${endpointId}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
+      }
+      const response = await fetch(url);
       console.log('Test logs response status:', response.status);
 
       if (!response.ok) {
@@ -442,7 +460,11 @@ const ApiDevelopment = ({ userRole }: ApiDevelopmentProps) => {
   // Quick status update function
   const updateEndpointStatus = async (endpointId: number, newStatus: 'COMPLETED' | 'NOT_STARTED' | 'IN_PROGRESS') => {
     try {
-      const response = await fetch(`http://localhost:8081/api/endpoints/${endpointId}`, {
+      let url = `http://localhost:8081/api/endpoints/${endpointId}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
+      }
+      const response = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -474,8 +496,6 @@ const ApiDevelopment = ({ userRole }: ApiDevelopmentProps) => {
       });
     }
   };
-
-
 
   return (
     <div className="space-y-8">

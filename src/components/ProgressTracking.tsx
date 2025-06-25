@@ -28,6 +28,7 @@ import {
 
 interface ProgressTrackingProps {
   userRole: 'admin' | 'employee';
+  employeeId?: string;
 }
 
 interface ProjectProgress {
@@ -48,7 +49,7 @@ interface ProjectProgress {
   }[];
 }
 
-const ProgressTracking = ({ userRole }: ProgressTrackingProps) => {
+const ProgressTracking = ({ userRole, employeeId }: ProgressTrackingProps) => {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -57,14 +58,14 @@ const ProgressTracking = ({ userRole }: ProgressTrackingProps) => {
 
   useEffect(() => {
     fetchIdeas();
-  }, []);
+  }, [employeeId]);
 
   const fetchIdeas = async () => {
     try {
       setLoading(true);
       console.log('Fetching ideas for progress tracking');
 
-      const data = await ideasApi.getIdeas();
+      const data = await ideasApi.getIdeas(employeeId);
       console.log('Fetched ideas data for progress tracking:', data);
       setIdeas(data.content || []);
     } catch (error) {
@@ -244,7 +245,7 @@ const ProgressTracking = ({ userRole }: ProgressTrackingProps) => {
       }
 
       console.log('Updating project status via ideas API');
-      await ideasApi.updateIdea(String(projectId), { status: ideaStatus });
+      await ideasApi.updateIdea(String(projectId), { status: ideaStatus }, employeeId);
 
       // Refresh the data
       await fetchIdeas();

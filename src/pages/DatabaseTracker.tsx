@@ -29,6 +29,7 @@ import {
 
 interface DatabaseTrackerProps {
   userRole: 'admin' | 'employee';
+  employeeId?: string;
 }
 
 interface Schema {
@@ -89,7 +90,7 @@ interface SchemaFormData {
   migrationsJson: string;
 }
 
-const DatabaseTracker = ({ userRole }: DatabaseTrackerProps) => {
+const DatabaseTracker = ({ userRole, employeeId }: DatabaseTrackerProps) => {
   const [activeTab, setActiveTab] = useState('schemas');
   const [showNewSchemaDialog, setShowNewSchemaDialog] = useState(false);
   const [showEditSchemaDialog, setShowEditSchemaDialog] = useState(false);
@@ -118,7 +119,11 @@ const DatabaseTracker = ({ userRole }: DatabaseTrackerProps) => {
       setLoading(true);
       // Add timestamp to prevent caching issues
       const timestamp = new Date().getTime();
-      const response = await fetch(`http://localhost:8081/api/database-trackers?page=0&size=10&sort=lastModified&direction=desc&_t=${timestamp}`);
+      let url = `http://localhost:8081/api/database-trackers?page=0&size=10&sort=lastModified&direction=desc&_t=${timestamp}`;
+      if (employeeId) {
+        url += `&employeeId=${employeeId}`;
+      }
+      const response = await fetch(url);
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Failed to fetch schemas:', response.status, response.statusText, errorText);
@@ -138,10 +143,6 @@ const DatabaseTracker = ({ userRole }: DatabaseTrackerProps) => {
       setLoading(false);
     }
   };
-
-
-
-
 
   // Helper function to validate JSON
   const validateMigrationsJson = (jsonString: string): boolean => {
@@ -181,7 +182,11 @@ const DatabaseTracker = ({ userRole }: DatabaseTrackerProps) => {
 
       console.log('Creating schema with data:', requestBody); // Debug log
 
-      const response = await fetch('http://localhost:8081/api/database-trackers', {
+      let url = 'http://localhost:8081/api/database-trackers';
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
+      }
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -273,7 +278,11 @@ const DatabaseTracker = ({ userRole }: DatabaseTrackerProps) => {
 
       console.log('Updating schema with data:', requestBody);
 
-      const response = await fetch(`http://localhost:8081/api/database-trackers/${selectedSchema.id}`, {
+      let url = `http://localhost:8081/api/database-trackers/${selectedSchema.id}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
+      }
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -328,7 +337,11 @@ const DatabaseTracker = ({ userRole }: DatabaseTrackerProps) => {
     try {
       console.log('Deleting schema:', selectedSchema.id);
 
-      const response = await fetch(`http://localhost:8081/api/database-trackers/${selectedSchema.id}`, {
+      let url = `http://localhost:8081/api/database-trackers/${selectedSchema.id}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
+      }
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -383,8 +396,6 @@ const DatabaseTracker = ({ userRole }: DatabaseTrackerProps) => {
       default: return Clock;
     }
   };
-
-
 
   return (
     <div className="space-y-8">

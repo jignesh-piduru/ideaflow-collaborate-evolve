@@ -155,27 +155,36 @@ export const USE_MOCK_IDEAS_API = false; // Set to false to use real backend API
 
 // Mock API service
 export const mockIdeasApi = {
-  async getIdeas(): Promise<ApiResponse<Idea>> {
+  async getIdeas(employeeId?: string): Promise<ApiResponse<Idea>> {
     await new Promise(resolve => setTimeout(resolve, 300));
-    const ideas = loadFromStorage(STORAGE_KEYS.IDEAS, mockIdeas);
+    let ideas = loadFromStorage(STORAGE_KEYS.IDEAS, mockIdeas);
+    if (employeeId) {
+      ideas = ideas.filter(idea => idea.assignedTo === employeeId);
+    }
     const validatedIdeas = ideas.map(validateIdea);
     return createMockResponse(validatedIdeas);
   },
 
-  async getIdeaById(id: string): Promise<Idea> {
+  async getIdeaById(id: string, employeeId?: string): Promise<Idea> {
     await new Promise(resolve => setTimeout(resolve, 300));
-    const ideas = loadFromStorage(STORAGE_KEYS.IDEAS, mockIdeas);
-    const idea = ideas.find(idea => idea.id === id);
+    let ideas = loadFromStorage(STORAGE_KEYS.IDEAS, mockIdeas);
+    let idea;
+    if (employeeId) {
+      idea = ideas.find(idea => idea.id === id && idea.assignedTo === employeeId);
+    } else {
+      idea = ideas.find(idea => idea.id === id);
+    }
     if (!idea) throw new Error('Idea not found');
     return validateIdea(idea);
   },
 
-  async createIdea(data: Partial<Idea>): Promise<Idea> {
+  async createIdea(data: Partial<Idea>, employeeId?: string): Promise<Idea> {
     await new Promise(resolve => setTimeout(resolve, 300));
     const ideas = loadFromStorage(STORAGE_KEYS.IDEAS, mockIdeas);
     const newIdea = validateIdea({
       ...data,
       id: Date.now().toString(),
+      assignedTo: employeeId || data.assignedTo || '',
       createdDate: new Date().toISOString().split('T')[0],
       updatedAt: new Date().toISOString()
     });
@@ -184,25 +193,28 @@ export const mockIdeasApi = {
     return newIdea;
   },
 
-  async updateIdea(id: string, data: Partial<Idea>): Promise<Idea> {
+  async updateIdea(id: string, data: Partial<Idea>, employeeId?: string): Promise<Idea> {
     await new Promise(resolve => setTimeout(resolve, 300));
     const ideas = loadFromStorage(STORAGE_KEYS.IDEAS, mockIdeas);
-    const index = ideas.findIndex(idea => idea.id === id);
+    const index = ideas.findIndex(idea => idea.id === id && (!employeeId || idea.assignedTo === employeeId));
     if (index === -1) throw new Error('Idea not found');
-    
-    ideas[index] = validateIdea({ ...ideas[index], ...data, updatedAt: new Date().toISOString() });
+    ideas[index] = validateIdea({ ...ideas[index], ...data, assignedTo: employeeId || ideas[index].assignedTo, updatedAt: new Date().toISOString() });
     saveToStorage(STORAGE_KEYS.IDEAS, ideas);
     return ideas[index];
   },
 
-  async deleteIdea(id: string): Promise<void> {
+  async deleteIdea(id: string, employeeId?: string): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 300));
-    const ideas = loadFromStorage(STORAGE_KEYS.IDEAS, mockIdeas);
-    const filteredIdeas = ideas.filter(idea => idea.id !== id);
-    saveToStorage(STORAGE_KEYS.IDEAS, filteredIdeas);
+    let ideas = loadFromStorage(STORAGE_KEYS.IDEAS, mockIdeas);
+    if (employeeId) {
+      ideas = ideas.filter(idea => !(idea.id === id && idea.assignedTo === employeeId));
+    } else {
+      ideas = ideas.filter(idea => idea.id !== id);
+    }
+    saveToStorage(STORAGE_KEYS.IDEAS, ideas);
   },
 
-  async upvoteIdea(id: string): Promise<Idea> {
+  async upvoteIdea(id: string, employeeId: string): Promise<Idea> {
     return this.updateIdea(id, {
       upvotes: (await this.getIdeaById(id)).upvotes + 1
     });
@@ -217,24 +229,27 @@ export const mockIdeasApi = {
 
 // Real API service for ideas management
 export const realIdeasApi = {
-  async getIdeas(): Promise<ApiResponse<Idea>> {
-    const response = await fetch('http://localhost:8080/api/ideas', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+  async getIdeas(employeeId?: string): Promise<ApiResponse<Idea>> {
+    const url = employeeId
+      ? `http://localhost:8080/api/ideas?employeeId=${employeeId}`
+      : 'http://localhost:8080/api/ideas';
+    const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
     if (!response.ok) {
       throw new Error(`Failed to fetch ideas: ${response.status} ${response.statusText}`);
     }
     const result = await response.json();
-    // Ensure all ideas have valid data
     if (result.content) {
       result.content = result.content.map(validateIdea);
     }
     return result;
   },
 
-  async getIdeaById(id: string): Promise<Idea> {
-    const response = await fetch(`http://localhost:8080/api/ideas/${id}`, {
+  async getIdeaById(id: string, employeeId?: string): Promise<Idea> {
+    let url = `http://localhost:8080/api/ideas/${id}`;
+    if (employeeId) {
+      url += `?employeeId=${employeeId}`;
+    }
+    const response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -245,75 +260,59 @@ export const realIdeasApi = {
     return validateIdea(result);
   },
 
-  async createIdea(data: Partial<Idea>): Promise<Idea> {
-    // Prepare request data with proper defaults and validation
+  async createIdea(data: Partial<Idea>, employeeId?: string): Promise<Idea> {
     const requestData = {
-      title: data.title || 'Untitled Idea',
-      description: data.description || '',
-      priority: data.priority || 'MEDIUM',
-      status: data.status || 'PENDING',
-      assignedTo: data.assignedTo || '',
-      upvotes: typeof data.upvotes === 'number' ? data.upvotes : 0,
-      comments: typeof data.comments === 'number' ? data.comments : 0,
-      dueDate: data.dueDate || new Date().toISOString().split('T')[0],
-      createdDate: data.createdDate || new Date().toISOString().split('T')[0],
-      tags: Array.isArray(data.tags) ? data.tags : []
+      ...data,
+      ...(employeeId ? { employeeId } : {})
     };
-
-    console.log('Creating idea with data:', requestData);
-
     const response = await fetch('http://localhost:8080/api/ideas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestData)
     });
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Create idea failed:', response.status, response.statusText, errorText);
       throw new Error(`Failed to create idea: ${response.status} ${response.statusText} - ${errorText}`);
     }
-
     const result = await response.json();
-    console.log('Created idea result:', result);
     return validateIdea(result);
   },
 
-  async updateIdea(id: string, data: Partial<Idea>): Promise<Idea> {
-    console.log(`Updating idea ${id} with data:`, data);
-
-    const response = await fetch(`http://localhost:8080/api/ideas/${id}`, {
+  async updateIdea(id: string, data: Partial<Idea>, employeeId?: string): Promise<Idea> {
+    let url = `http://localhost:8080/api/ideas/${id}`;
+    if (employeeId) {
+      url += `?employeeId=${employeeId}`;
+    }
+    const requestData = {
+      ...data,
+      ...(employeeId ? { employeeId } : {})
+    };
+    const response = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(requestData)
     });
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Update idea failed:', response.status, response.statusText, errorText);
       throw new Error(`Failed to update idea: ${response.status} ${response.statusText} - ${errorText}`);
     }
-
     const result = await response.json();
-    console.log('Updated idea result:', result);
     return validateIdea(result);
   },
 
-  async deleteIdea(id: string): Promise<void> {
-    console.log(`Deleting idea ${id}`);
-
-    const response = await fetch(`http://localhost:8080/api/ideas/${id}`, {
+  async deleteIdea(id: string, employeeId?: string): Promise<void> {
+    let url = `http://localhost:8080/api/ideas/${id}`;
+    if (employeeId) {
+      url += `?employeeId=${employeeId}`;
+    }
+    const response = await fetch(url, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' }
     });
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Delete idea failed:', response.status, response.statusText, errorText);
       throw new Error(`Failed to delete idea: ${response.status} ${response.statusText} - ${errorText}`);
     }
-
-    console.log(`Successfully deleted idea ${id}`);
   },
 
   async upvoteIdea(id: string): Promise<Idea> {
@@ -375,7 +374,7 @@ export const realIdeasApi = {
 };
 
 // Main API service that switches between mock and real API
-export const ideasApi = USE_MOCK_IDEAS_API ? mockIdeasApi : realIdeasApi;
+const ideasApi = USE_MOCK_IDEAS_API ? mockIdeasApi : realIdeasApi;
 
 // Export default API service for easy importing
 export default ideasApi;

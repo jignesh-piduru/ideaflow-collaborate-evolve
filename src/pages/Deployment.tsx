@@ -1,6 +1,4 @@
-
 import { useState, useEffect } from 'react';
-import { mockApi, USE_MOCK_API } from '@/services/mockApi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +33,7 @@ import {
 
 interface DeploymentProps {
   userRole: 'admin' | 'employee';
+  employeeId?: string;
 }
 
 interface Deployment {
@@ -132,7 +131,7 @@ interface EnvironmentFormData {
   url: string;
 }
 
-const Deployment = ({ userRole }: DeploymentProps) => {
+const Deployment = ({ userRole, employeeId }: DeploymentProps) => {
   const [activeTab, setActiveTab] = useState('pipelines');
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [environments, setEnvironments] = useState<Environment[]>([]);
@@ -168,37 +167,28 @@ const Deployment = ({ userRole }: DeploymentProps) => {
     fetchEnvironments();
   }, []);
 
+  // Helper to get OffsetDateTime-compatible string
+  const getOffsetDateTime = (date?: Date) => {
+    return (date || new Date()).toISOString().replace('Z', '+00:00');
+  };
+
   // API Functions for Deployments
   const fetchDeployments = async () => {
     try {
       setLoading(true);
-      console.log('Fetching deployments from /api/deployments');
-
-      if (USE_MOCK_API) {
-        console.log('Using mock API for deployments');
-        const data = await mockApi.getDeployments();
-        console.log('Fetched deployments data (mock):', data);
-        setDeployments(data.content || []);
-        return;
+      let url = '/api/deployments?page=0&size=20&sort=createdAt&direction=desc';
+      if (employeeId) {
+        url += `&employeeId=${employeeId}`;
       }
-
-      const response = await fetch('/api/deployments?page=0&size=20&sort=createdAt&direction=desc');
-      console.log('Deployments response status:', response.status);
-
+      const response = await fetch(url);
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Deployments error response:', errorText);
         throw new Error(`Failed to fetch deployments: ${response.status} - ${errorText}`);
       }
-
       const data: ApiResponse<Deployment> = await response.json();
-      console.log('Fetched deployments data:', data);
-
       setDeployments(data.content || []);
     } catch (error) {
-      console.error('Error fetching deployments:', error);
       setDeployments([]);
-
       toast({
         title: "Error",
         description: "Failed to fetch deployments. Please try again later.",
@@ -212,33 +202,19 @@ const Deployment = ({ userRole }: DeploymentProps) => {
   const fetchEnvironments = async () => {
     try {
       setEnvironmentsLoading(true);
-      console.log('Fetching environments from /api/environments');
-
-      if (USE_MOCK_API) {
-        console.log('Using mock API for environments');
-        const data = await mockApi.getEnvironments();
-        console.log('Fetched environments data (mock):', data);
-        setEnvironments(data.content || []);
-        return;
+      let url = '/api/environments?page=0&size=20&sort=createdAt&direction=desc';
+      if (employeeId) {
+        url += `&employeeId=${employeeId}`;
       }
-
-      const response = await fetch('/api/environments?page=0&size=20&sort=createdAt&direction=desc');
-      console.log('Environments response status:', response.status);
-
+      const response = await fetch(url);
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Environments error response:', errorText);
         throw new Error(`Failed to fetch environments: ${response.status} - ${errorText}`);
       }
-
       const data: ApiResponse<Environment> = await response.json();
-      console.log('Fetched environments data:', data);
-
       setEnvironments(data.content || []);
     } catch (error) {
-      console.error('Error fetching environments:', error);
       setEnvironments([]);
-
       toast({
         title: "Error",
         description: "Failed to fetch environments. Please try again later.",
@@ -251,33 +227,10 @@ const Deployment = ({ userRole }: DeploymentProps) => {
 
   const createDeployment = async (deploymentData: DeploymentFormData) => {
     try {
-      console.log('Creating deployment with data:', deploymentData);
-
-      if (USE_MOCK_API) {
-        console.log('Using mock API for creating deployment');
-        const result = await mockApi.createDeployment(deploymentData);
-        console.log('Deployment created successfully (mock):', result);
-
-        toast({
-          title: "Success",
-          description: "Deployment created successfully!",
-        });
-
-        setShowCreateDeploymentDialog(false);
-        setDeploymentForm({
-          name: '',
-          environment: '',
-          version: '',
-          branch: '',
-          commitHash: '',
-          description: '',
-          status: 'PENDING',
-          health: 'UNKNOWN'
-        });
-        fetchDeployments();
-        return;
+      let url = '/api/deployments';
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
       }
-
       const requestBody = {
         name: deploymentData.name,
         environment: deploymentData.environment,
@@ -287,32 +240,25 @@ const Deployment = ({ userRole }: DeploymentProps) => {
         description: deploymentData.description,
         status: deploymentData.status,
         health: deploymentData.health,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: getOffsetDateTime(),
+        updatedAt: getOffsetDateTime()
       };
-
-      const response = await fetch('/api/deployments', {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
       });
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Create deployment error:', errorText);
         throw new Error(`Failed to create deployment: ${response.status} - ${errorText}`);
       }
-
-      const result = await response.json();
-      console.log('Deployment created successfully:', result);
-
+      await response.json();
       toast({
         title: "Success",
         description: "Deployment created successfully!",
       });
-
       setShowCreateDeploymentDialog(false);
       setDeploymentForm({
         name: '',
@@ -326,7 +272,6 @@ const Deployment = ({ userRole }: DeploymentProps) => {
       });
       fetchDeployments();
     } catch (error) {
-      console.error('Error creating deployment:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create deployment. Please try again.",
@@ -337,24 +282,10 @@ const Deployment = ({ userRole }: DeploymentProps) => {
 
   const updateDeployment = async (id: number | string, deploymentData: DeploymentFormData) => {
     try {
-      console.log('Updating deployment with ID:', id, 'Data:', deploymentData);
-
-      if (USE_MOCK_API) {
-        console.log('Using mock API for updating deployment');
-        const result = await mockApi.updateDeployment(String(id), deploymentData);
-        console.log('Deployment updated successfully (mock):', result);
-
-        toast({
-          title: "Success",
-          description: "Deployment updated successfully!",
-        });
-
-        setShowEditDeploymentDialog(false);
-        setSelectedDeployment(null);
-        fetchDeployments();
-        return;
+      let url = `/api/deployments/${id}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
       }
-
       const requestBody = {
         name: deploymentData.name,
         environment: deploymentData.environment,
@@ -364,36 +295,28 @@ const Deployment = ({ userRole }: DeploymentProps) => {
         description: deploymentData.description,
         status: deploymentData.status,
         health: deploymentData.health,
-        updatedAt: new Date().toISOString()
+        updatedAt: getOffsetDateTime()
       };
-
-      const response = await fetch(`/api/deployments/${id}`, {
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
       });
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Update deployment error:', errorText);
         throw new Error(`Failed to update deployment: ${response.status} - ${errorText}`);
       }
-
-      const result = await response.json();
-      console.log('Deployment updated successfully:', result);
-
+      await response.json();
       toast({
         title: "Success",
         description: "Deployment updated successfully!",
       });
-
       setShowEditDeploymentDialog(false);
       setSelectedDeployment(null);
       fetchDeployments();
     } catch (error) {
-      console.error('Error updating deployment:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update deployment. Please try again.",
@@ -404,42 +327,23 @@ const Deployment = ({ userRole }: DeploymentProps) => {
 
   const deleteDeployment = async (id: number | string) => {
     try {
-      console.log('Deleting deployment with ID:', id);
-
-      if (USE_MOCK_API) {
-        console.log('Using mock API for deleting deployment');
-        await mockApi.deleteDeployment(String(id));
-        console.log('Deployment deleted successfully (mock)');
-
-        toast({
-          title: "Success",
-          description: "Deployment deleted successfully!",
-        });
-
-        fetchDeployments();
-        return;
+      let url = `/api/deployments/${id}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
       }
-
-      const response = await fetch(`/api/deployments/${id}`, {
+      const response = await fetch(url, {
         method: 'DELETE',
       });
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Delete deployment error:', errorText);
         throw new Error(`Failed to delete deployment: ${response.status} - ${errorText}`);
       }
-
-      console.log('Deployment deleted successfully');
-
       toast({
         title: "Success",
         description: "Deployment deleted successfully!",
       });
-
       fetchDeployments();
     } catch (error) {
-      console.error('Error deleting deployment:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete deployment. Please try again.",
@@ -451,59 +355,34 @@ const Deployment = ({ userRole }: DeploymentProps) => {
   // Environment CRUD Functions
   const createEnvironment = async (environmentData: EnvironmentFormData) => {
     try {
-      console.log('Creating environment with data:', environmentData);
-
-      if (USE_MOCK_API) {
-        console.log('Using mock API for creating environment');
-        const result = await mockApi.createEnvironment(environmentData);
-        console.log('Environment created successfully (mock):', result);
-
-        toast({
-          title: "Success",
-          description: "Environment created successfully!",
-        });
-
-        setShowCreateEnvironmentDialog(false);
-        setEnvironmentForm({
-          name: '',
-          description: '',
-          url: ''
-        });
-        fetchEnvironments();
-        return;
+      let url = '/api/environments';
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
       }
-
       const requestBody = {
         name: environmentData.name,
         description: environmentData.description,
         url: environmentData.url,
         status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: getOffsetDateTime(),
+        updatedAt: getOffsetDateTime()
       };
-
-      const response = await fetch('/api/environments', {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
       });
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Create environment error:', errorText);
         throw new Error(`Failed to create environment: ${response.status} - ${errorText}`);
       }
-
-      const result = await response.json();
-      console.log('Environment created successfully:', result);
-
+      await response.json();
       toast({
         title: "Success",
         description: "Environment created successfully!",
       });
-
       setShowCreateEnvironmentDialog(false);
       setEnvironmentForm({
         name: '',
@@ -512,7 +391,6 @@ const Deployment = ({ userRole }: DeploymentProps) => {
       });
       fetchEnvironments();
     } catch (error) {
-      console.error('Error creating environment:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create environment. Please try again.",
@@ -523,58 +401,36 @@ const Deployment = ({ userRole }: DeploymentProps) => {
 
   const updateEnvironment = async (id: number | string, environmentData: EnvironmentFormData) => {
     try {
-      console.log('Updating environment with ID:', id, 'Data:', environmentData);
-
-      if (USE_MOCK_API) {
-        console.log('Using mock API for updating environment');
-        const result = await mockApi.updateEnvironment(String(id), environmentData);
-        console.log('Environment updated successfully (mock):', result);
-
-        toast({
-          title: "Success",
-          description: "Environment updated successfully!",
-        });
-
-        setShowEditEnvironmentDialog(false);
-        setSelectedEnvironment(null);
-        fetchEnvironments();
-        return;
+      let url = `/api/environments/${id}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
       }
-
       const requestBody = {
         name: environmentData.name,
         description: environmentData.description,
         url: environmentData.url,
-        updatedAt: new Date().toISOString()
+        updatedAt: getOffsetDateTime()
       };
-
-      const response = await fetch(`/api/environments/${id}`, {
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
       });
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Update environment error:', errorText);
         throw new Error(`Failed to update environment: ${response.status} - ${errorText}`);
       }
-
-      const result = await response.json();
-      console.log('Environment updated successfully:', result);
-
+      await response.json();
       toast({
         title: "Success",
         description: "Environment updated successfully!",
       });
-
       setShowEditEnvironmentDialog(false);
       setSelectedEnvironment(null);
       fetchEnvironments();
     } catch (error) {
-      console.error('Error updating environment:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update environment. Please try again.",
@@ -585,42 +441,23 @@ const Deployment = ({ userRole }: DeploymentProps) => {
 
   const deleteEnvironment = async (id: number | string) => {
     try {
-      console.log('Deleting environment with ID:', id);
-
-      if (USE_MOCK_API) {
-        console.log('Using mock API for deleting environment');
-        await mockApi.deleteEnvironment(String(id));
-        console.log('Environment deleted successfully (mock)');
-
-        toast({
-          title: "Success",
-          description: "Environment deleted successfully!",
-        });
-
-        fetchEnvironments();
-        return;
+      let url = `/api/environments/${id}`;
+      if (employeeId) {
+        url += `?employeeId=${employeeId}`;
       }
-
-      const response = await fetch(`/api/environments/${id}`, {
+      const response = await fetch(url, {
         method: 'DELETE',
       });
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Delete environment error:', errorText);
         throw new Error(`Failed to delete environment: ${response.status} - ${errorText}`);
       }
-
-      console.log('Environment deleted successfully');
-
       toast({
         title: "Success",
         description: "Environment deleted successfully!",
       });
-
       fetchEnvironments();
     } catch (error) {
-      console.error('Error deleting environment:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to delete environment. Please try again.",

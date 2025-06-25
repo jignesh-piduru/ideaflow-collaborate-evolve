@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -29,7 +28,6 @@ const Layout = ({ children, userRole }: LayoutProps) => {
     { id: 'overview', label: 'Overview', icon: BarChart3, path: '/', roles: ['admin', 'employee'] },
     { id: 'ideas', label: 'Ideas', icon: Lightbulb, path: '/ideas', roles: ['admin', 'employee'] },
     { id: 'progress', label: 'Progress Tracking', icon: TrendingUp, path: '/progress', roles: ['admin', 'employee'] },
-    { id: 'employees', label: 'Employees', icon: Users, path: '/employees', roles: ['admin', 'employee'] },
     { id: 'assignments', label: 'Assignments', icon: Users, path: '/assignments', roles: ['admin'] },
     { id: 'database', label: 'Database Tracker', icon: Database, path: '/database', roles: ['admin', 'employee'] },
     { id: 'api', label: 'API Development', icon: Code, path: '/api', roles: ['admin', 'employee'] },

@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -14,7 +13,6 @@ import DatabaseTracker from "./pages/DatabaseTracker";
 import ApiDevelopment from "./pages/ApiDevelopment";
 import Deployment from "./pages/Deployment";
 import Evidence from "./pages/Evidence";
-import Employees from "./pages/Employees";
 import Layout from "./components/Layout";
 
 const queryClient = new QueryClient();
@@ -53,14 +51,6 @@ const App = () => {
               element={
                 <Layout userRole={userRole}>
                   <ProgressTracking userRole={userRole} />
-                </Layout>
-              }
-            />
-            <Route
-              path="/employees"
-              element={
-                <Layout userRole={userRole}>
-                  <Employees userRole={userRole} />
                 </Layout>
               }
             />
